@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: inkflow-api
+    env: java
+    buildCommand: javac -d build src/main/java/com/inkflow/api/SimpleApplication.java
+    startCommand: java -cp build com.inkflow.api.SimpleApplication
+    envVars:
+      - key: PORT
+        value: 8080
