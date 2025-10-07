@@ -16,19 +16,13 @@ public class SimpleApplication {
     private static Long bookingIdCounter = 1L;
 
     public static void main(String[] args) throws Exception {
-        // Conectar ao Supabase
         connectToSupabase();
-        
-        // Criar tabelas se não existirem
         createTables();
-        
-        // Usuário admin padrão
         createAdminUser();
         
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         
-        // CORS handler
         server.createContext("/", new CorsHandler());
         server.createContext("/api/auth/login", new LoginHandler());
         server.createContext("/api/auth/register", new RegisterHandler());
@@ -60,7 +54,6 @@ public class SimpleApplication {
         try {
             Statement stmt = db.createStatement();
             
-            // Tabela users
             stmt.execute(
                 "CREATE TABLE IF NOT EXISTS users (" +
                 "id SERIAL PRIMARY KEY," +
@@ -72,7 +65,6 @@ public class SimpleApplication {
                 ")"
             );
             
-            // Tabela bookings
             stmt.execute(
                 "CREATE TABLE IF NOT EXISTS bookings (" +
                 "id SERIAL PRIMARY KEY," +
@@ -116,9 +108,7 @@ public class SimpleApplication {
 
     static class CorsHandler implements HttpHandler {
         public void handle(HttpExchange exchange) throws IOException {
-            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-            exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "*");
+            setCorsHeaders(exchange);
             
             if ("OPTIONS".equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(200, 0);
@@ -216,7 +206,6 @@ public class SimpleApplication {
             }
             
             String method = exchange.getRequestMethod();
-            String path = exchange.getRequestURI().getPath();
             
             if ("GET".equals(method)) {
                 String bookingsJson = getBookingsFromDB();
@@ -281,19 +270,6 @@ public class SimpleApplication {
             "{\"id\":%d,\"nome\":\"%s\",\"email\":\"%s\",\"telefone\":\"%s\",\"servico\":\"%s\",\"data\":\"%s\",\"horario\":\"%s\",\"descricao\":\"%s\",\"status\":\"%s\"}",
             booking.id, booking.nome, booking.email, booking.telefone, booking.servico, booking.data, booking.horario, booking.descricao, booking.status
         );
-    }
-
-    static class User {
-        String nome, email, senha, telefone;
-        boolean isAdmin;
-        
-        User(String nome, String email, String senha, String telefone, boolean isAdmin) {
-            this.nome = nome;
-            this.email = email;
-            this.senha = senha;
-            this.telefone = telefone;
-            this.isAdmin = isAdmin;
-        }
     }
 
     static User getUserFromDB(String email) {
