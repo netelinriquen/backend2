@@ -36,12 +36,10 @@ public class SimpleApplication {
 
     static void connectToSupabase() {
         try {
-            String url = System.getenv().getOrDefault("SUPABASE_DB_URL", "jdbc:postgresql://localhost:5432/inkflow");
-            String user = System.getenv().getOrDefault("SUPABASE_DB_USER", "postgres");
-            String password = System.getenv().getOrDefault("SUPABASE_DB_PASSWORD", "password");
+            String supabaseUrl = System.getenv().getOrDefault("SUPABASE_URL", "db.iksathqjjsdswcnlrsqm.supabase.co");
+            String password = System.getenv().getOrDefault("SUPABASE_PASSWORD", "password");
             
-            // Adicionar SSL e configurações para Supabase
-            url += "?sslmode=require&user=" + user + "&password=" + password;
+            String url = "jdbc:postgresql://" + supabaseUrl + ":5432/postgres?user=postgres&password=" + password + "&sslmode=require";
             
             Class.forName("org.postgresql.Driver");
             db = DriverManager.getConnection(url);
