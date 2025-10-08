@@ -5,12 +5,17 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 import java.io.*;
 import java.net.InetSocketAddress;
-import java.sql.*;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SimpleApplication {
-    private static Connection db;
+    private static String SUPABASE_URL;
+    private static String SUPABASE_KEY;
+    private static HttpClient httpClient;
     private static Map<String, User> users = new ConcurrentHashMap<>();
     private static Map<Long, Booking> bookings = new ConcurrentHashMap<>();
     private static Long bookingIdCounter = 1L;
@@ -35,71 +40,65 @@ public class SimpleApplication {
     }
 
     static void connectToSupabase() {
-        String supabaseUrl = System.getenv("SUPABASE_URL");
-        String supabaseKey = System.getenv("SUPABASE_KEY");
+        SUPABASE_URL = System.getenv("SUPABASE_URL");
+        SUPABASE_KEY = System.getenv("SUPABASE_KEY");
         
-        if (supabaseUrl != null && supabaseKey != null) {
+        if (SUPABASE_URL != null && SUPABASE_KEY != null) {
+            httpClient = HttpClient.newHttpClient();
             System.out.println("Supabase API configurado!");
-            System.out.println("URL: " + supabaseUrl);
+            createTablesAPI();
+            createAdminUserAPI();
         } else {
             System.out.println("Usando memória local...");
         }
     }
 
     static void createTables() {
-        if (db == null) return;
+        // Não usado mais - tabelas criadas via API
+    }
+    
+    static void createTablesAPI() {
         try {
-            Statement stmt = db.createStatement();
-            
-            stmt.execute(
-                "CREATE TABLE IF NOT EXISTS users (" +
-                "id SERIAL PRIMARY KEY," +
-                "nome VARCHAR(255) NOT NULL," +
-                "email VARCHAR(255) UNIQUE NOT NULL," +
-                "senha VARCHAR(255) NOT NULL," +
-                "telefone VARCHAR(20)," +
-                "is_admin BOOLEAN DEFAULT FALSE" +
-                ")"
-            );
-            
-            stmt.execute(
-                "CREATE TABLE IF NOT EXISTS bookings (" +
-                "id SERIAL PRIMARY KEY," +
-                "nome VARCHAR(255) NOT NULL," +
-                "email VARCHAR(255) NOT NULL," +
-                "telefone VARCHAR(20) NOT NULL," +
-                "servico VARCHAR(255) NOT NULL," +
-                "data DATE NOT NULL," +
-                "horario TIME NOT NULL," +
-                "descricao TEXT," +
-                "status VARCHAR(20) DEFAULT 'PENDENTE'" +
-                ")"
-            );
-            
-            System.out.println("Tabelas criadas/verificadas!");
+            // Verificar se tabelas existem via API REST
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(SUPABASE_URL + "/rest/v1/users?limit=1"))
+                .header("apikey", SUPABASE_KEY)
+                .header("Authorization", "Bearer " + SUPABASE_KEY)
+                .GET()
+                .build();
+                
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("Tabelas Supabase verificadas! Status: " + response.statusCode());
         } catch (Exception e) {
-            System.out.println("Erro ao criar tabelas: " + e.getMessage());
+            System.out.println("Aviso: Tabelas podem não existir ainda: " + e.getMessage());
         }
     }
 
     static void createAdminUser() {
-        if (db == null) {
+        if (SUPABASE_URL == null) {
             users.put("admin@inkflow.com", new User("Administrador", "admin@inkflow.com", "admin123", "", true));
             return;
         }
-        
+        // Admin será criado via API quando necessário
+    }
+    
+    static void createAdminUserAPI() {
         try {
-            PreparedStatement stmt = db.prepareStatement(
-                "INSERT INTO users (nome, email, senha, is_admin) VALUES (?, ?, ?, ?) ON CONFLICT (email) DO NOTHING"
-            );
-            stmt.setString(1, "Administrador");
-            stmt.setString(2, "admin@inkflow.com");
-            stmt.setString(3, "admin123");
-            stmt.setBoolean(4, true);
-            stmt.executeUpdate();
-            System.out.println("Usuário admin criado/verificado!");
+            String adminJson = "{\"nome\":\"Administrador\",\"email\":\"admin@inkflow.com\",\"senha\":\"admin123\",\"is_admin\":true}";
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(SUPABASE_URL + "/rest/v1/users"))
+                .header("apikey", SUPABASE_KEY)
+                .header("Authorization", "Bearer " + SUPABASE_KEY)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "resolution=ignore-duplicates")
+                .POST(HttpRequest.BodyPublishers.ofString(adminJson))
+                .build();
+                
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("Admin criado/verificado! Status: " + response.statusCode());
         } catch (Exception e) {
-            System.out.println("Erro ao criar admin: " + e.getMessage());
+            System.out.println("Aviso admin: " + e.getMessage());
         }
     }
 
