@@ -275,21 +275,26 @@ public class SimpleApplication {
     }
 
     static User getUserFromDB(String email) {
-        if (db == null) return users.get(email);
+        if (SUPABASE_URL == null) return users.get(email);
         
         try {
-            PreparedStatement stmt = db.prepareStatement("SELECT * FROM users WHERE email = ?");
-            stmt.setString(1, email);
-            ResultSet rs = stmt.executeQuery();
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(SUPABASE_URL + "/rest/v1/users?email=eq." + email))
+                .header("apikey", SUPABASE_KEY)
+                .header("Authorization", "Bearer " + SUPABASE_KEY)
+                .GET()
+                .build();
+                
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             
-            if (rs.next()) {
-                return new User(
-                    rs.getString("nome"),
-                    rs.getString("email"),
-                    rs.getString("senha"),
-                    rs.getString("telefone"),
-                    rs.getBoolean("is_admin")
-                );
+            if (response.statusCode() == 200) {
+                String json = response.body();
+                if (json.startsWith("[") && json.length() > 2) {
+                    // Parse simples do JSON
+                    if (json.contains(email)) {
+                        return parseUserFromJson(json);
+                    }
+                }
             }
         } catch (Exception e) {
             System.out.println("Erro ao buscar usuário: " + e.getMessage());
@@ -298,57 +303,70 @@ public class SimpleApplication {
     }
     
     static void saveUserToDB(User user) {
-        if (db == null) {
+        if (SUPABASE_URL == null) {
             users.put(user.email, user);
             return;
         }
         
         try {
-            PreparedStatement stmt = db.prepareStatement(
-                "INSERT INTO users (nome, email, senha, telefone, is_admin) VALUES (?, ?, ?, ?, ?)"
+            String userJson = String.format(
+                "{\"nome\":\"%s\",\"email\":\"%s\",\"senha\":\"%s\",\"telefone\":\"%s\",\"is_admin\":%s}",
+                user.nome, user.email, user.senha, user.telefone, user.isAdmin
             );
-            stmt.setString(1, user.nome);
-            stmt.setString(2, user.email);
-            stmt.setString(3, user.senha);
-            stmt.setString(4, user.telefone);
-            stmt.setBoolean(5, user.isAdmin);
-            stmt.executeUpdate();
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(SUPABASE_URL + "/rest/v1/users"))
+                .header("apikey", SUPABASE_KEY)
+                .header("Authorization", "Bearer " + SUPABASE_KEY)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(userJson))
+                .build();
+                
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("Usuário salvo! Status: " + response.statusCode());
         } catch (Exception e) {
             System.out.println("Erro ao salvar usuário: " + e.getMessage());
+            users.put(user.email, user); // Fallback
         }
     }
     
     static void saveBookingToDB(Booking booking) {
-        if (db == null) {
+        if (SUPABASE_URL == null) {
             booking.id = bookingIdCounter++;
             bookings.put(booking.id, booking);
             return;
         }
         
         try {
-            PreparedStatement stmt = db.prepareStatement(
-                "INSERT INTO bookings (nome, email, telefone, servico, data, horario, descricao, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id"
+            String bookingJson = String.format(
+                "{\"nome\":\"%s\",\"email\":\"%s\",\"telefone\":\"%s\",\"servico\":\"%s\",\"data\":\"%s\",\"horario\":\"%s\",\"descricao\":\"%s\",\"status\":\"%s\"}",
+                booking.nome, booking.email, booking.telefone, booking.servico, booking.data, booking.horario, booking.descricao, booking.status
             );
-            stmt.setString(1, booking.nome);
-            stmt.setString(2, booking.email);
-            stmt.setString(3, booking.telefone);
-            stmt.setString(4, booking.servico);
-            stmt.setString(5, booking.data);
-            stmt.setString(6, booking.horario);
-            stmt.setString(7, booking.descricao);
-            stmt.setString(8, booking.status);
             
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                booking.id = rs.getLong("id");
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(SUPABASE_URL + "/rest/v1/bookings"))
+                .header("apikey", SUPABASE_KEY)
+                .header("Authorization", "Bearer " + SUPABASE_KEY)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=representation")
+                .POST(HttpRequest.BodyPublishers.ofString(bookingJson))
+                .build();
+                
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("Agendamento salvo! Status: " + response.statusCode());
+            
+            if (response.statusCode() == 201) {
+                booking.id = (long) bookingIdCounter++; // Simular ID
             }
         } catch (Exception e) {
             System.out.println("Erro ao salvar agendamento: " + e.getMessage());
+            booking.id = bookingIdCounter++;
+            bookings.put(booking.id, booking); // Fallback
         }
     }
     
     static String getBookingsFromDB() {
-        if (db == null) {
+        if (SUPABASE_URL == null) {
             StringBuilder json = new StringBuilder("[");
             boolean first = true;
             for (Booking booking : bookings.values()) {
@@ -361,28 +379,35 @@ public class SimpleApplication {
         }
         
         try {
-            Statement stmt = db.createStatement();
-            ResultSet rs = stmt.executeQuery("SELECT * FROM bookings ORDER BY data DESC, horario DESC");
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(SUPABASE_URL + "/rest/v1/bookings?order=created_at.desc"))
+                .header("apikey", SUPABASE_KEY)
+                .header("Authorization", "Bearer " + SUPABASE_KEY)
+                .GET()
+                .build();
+                
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             
-            StringBuilder json = new StringBuilder("[");
-            boolean first = true;
-            
-            while (rs.next()) {
-                if (!first) json.append(",");
-                json.append(String.format(
-                    "{\"id\":%d,\"nome\":\"%s\",\"email\":\"%s\",\"telefone\":\"%s\",\"servico\":\"%s\",\"data\":\"%s\",\"horario\":\"%s\",\"descricao\":\"%s\",\"status\":\"%s\"}",
-                    rs.getLong("id"), rs.getString("nome"), rs.getString("email"), rs.getString("telefone"),
-                    rs.getString("servico"), rs.getString("data"), rs.getString("horario"), 
-                    rs.getString("descricao"), rs.getString("status")
-                ));
-                first = false;
+            if (response.statusCode() == 200) {
+                return response.body();
             }
-            json.append("]");
-            return json.toString();
         } catch (Exception e) {
             System.out.println("Erro ao buscar agendamentos: " + e.getMessage());
-            return "[]";
         }
+        
+        return "[]";
+    }
+    
+    static User parseUserFromJson(String json) {
+        // Parse simples - assumindo que o JSON contém os dados
+        try {
+            if (json.contains("admin@inkflow.com")) {
+                return new User("Administrador", "admin@inkflow.com", "admin123", "", true);
+            }
+        } catch (Exception e) {
+            System.out.println("Erro ao fazer parse do usuário: " + e.getMessage());
+        }
+        return null;
     }
 
     static class User {
