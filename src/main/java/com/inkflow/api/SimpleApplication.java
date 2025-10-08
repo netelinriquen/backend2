@@ -40,8 +40,11 @@ public class SimpleApplication {
             String user = System.getenv().getOrDefault("SUPABASE_DB_USER", "postgres");
             String password = System.getenv().getOrDefault("SUPABASE_DB_PASSWORD", "password");
             
+            // Adicionar SSL e configurações para Supabase
+            url += "?sslmode=require&user=" + user + "&password=" + password;
+            
             Class.forName("org.postgresql.Driver");
-            db = DriverManager.getConnection(url, user, password);
+            db = DriverManager.getConnection(url);
             System.out.println("Conectado ao Supabase!");
         } catch (Exception e) {
             System.out.println("Erro ao conectar Supabase: " + e.getMessage());
@@ -112,6 +115,12 @@ public class SimpleApplication {
             
             if ("OPTIONS".equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(200, 0);
+                exchange.close();
+                return;
+            }
+            
+            if ("HEAD".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(200, -1);
                 exchange.close();
                 return;
             }
