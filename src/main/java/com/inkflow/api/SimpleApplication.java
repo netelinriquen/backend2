@@ -35,17 +35,13 @@ public class SimpleApplication {
     }
 
     static void connectToSupabase() {
-        try {
-            String supabaseUrl = System.getenv().getOrDefault("SUPABASE_URL", "db.iksathqjjsdswcnlrsqm.supabase.co");
-            String password = System.getenv().getOrDefault("SUPABASE_PASSWORD", "password");
-            
-            String url = "jdbc:postgresql://" + supabaseUrl + ":5432/postgres?user=postgres&password=" + password + "&sslmode=require";
-            
-            Class.forName("org.postgresql.Driver");
-            db = DriverManager.getConnection(url);
-            System.out.println("Conectado ao Supabase!");
-        } catch (Exception e) {
-            System.out.println("Erro ao conectar Supabase: " + e.getMessage());
+        String supabaseUrl = System.getenv("SUPABASE_URL");
+        String supabaseKey = System.getenv("SUPABASE_KEY");
+        
+        if (supabaseUrl != null && supabaseKey != null) {
+            System.out.println("Supabase API configurado!");
+            System.out.println("URL: " + supabaseUrl);
+        } else {
             System.out.println("Usando memória local...");
         }
     }
